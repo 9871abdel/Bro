@@ -1,236 +1,200 @@
+-- Roblox Pet ESP + GUI script by Jamaldseller
+
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local mouse = player:GetMouse()
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Workspace = game:GetService("Workspace")
 
--- Pet definitions for Zen Egg
-local petTable = {
-    ["Zen Egg"] = {
-        "Shiba Inu",     -- 40%
-        "Nihonzaru",     -- 31%
-        "Tanuki",        -- 20.82%
-        "Tanchozuru",    -- 4.6%
-        "Kappa",         -- 3.5%
-        "Kitsune"        -- Modified to ~1% chance
-    }
-}
+-- GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PetESPGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local truePetMap = {}
-local espEnabled = true
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 220, 0, 150)
+Frame.Position = UDim2.new(0, 20, 0.5, -75)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BackgroundTransparency = 0.25
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
 
-local function glitchLabelEffect(label)
-    coroutine.wrap(function()
-        local original = label.TextColor3
-        for i = 1, 2 do
-            label.TextColor3 = Color3.new(1, 0, 0)
-            wait(0.07)
-            label.TextColor3 = original
-            wait(0.07)
-        end
-    end)()
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = Frame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+local function createButton(text)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 0, 30)
+    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    button.BorderSizePixel = 0
+    button.TextColor3 = Color3.fromRGB(200, 200, 200)
+    button.Font = Enum.Font.Gotham
+    button.TextSize = 16
+    button.Text = text
+    button.Parent = Frame
+    return button
 end
 
-local function applyEggESP(eggModel, petName)
-    local existingLabel = eggModel:FindFirstChild("PetBillboard", true)
-    if existingLabel then existingLabel:Destroy() end
+local espToggle = createButton("Toggle ESP")
+local level50Button = createButton("LEVEL 50") -- Useless button, does nothing
 
-    local existingHighlight = eggModel:FindFirstChild("ESPHighlight", true)
-    if existingHighlight then existingHighlight:Destroy() end
-    if not espEnabled then return end
+local creditLabel = Instance.new("TextLabel")
+creditLabel.Size = UDim2.new(1, -10, 0, 25)
+creditLabel.BackgroundTransparency = 1
+creditLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+creditLabel.Font = Enum.Font.Gotham
+creditLabel.TextSize = 14
+creditLabel.Text = "Made by Jamaldseller"
+creditLabel.TextXAlignment = Enum.TextXAlignment.Right
+creditLabel.Parent = Frame
 
-    local basePart = eggModel:FindFirstChildWhichIsA("BasePart", true)
-    if not basePart then return end
+-- Variables
+local espEnabled = false
+local truePetMap = {}  -- Tracks pets and their ESP objects
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "PetBillboard"
-    billboard.Size = UDim2.new(0, 280, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 4.5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 500
-    billboard.Parent = basePart
+-- Updated pet data with kitsune 1% chance
+local petData = {
+    ["Shiba Inu"] = {chance = 40, trait = "Every ~1 Minute, ~15% chance to dig up a random seed!"},
+    ["Nihonzaru"] = {chance = 31, trait = "As long as the player has a Hot Spring in their garden: bathes in it and boosts all other pet's passives by a small amount."},
+    ["Tanuki"] = {chance = 20.82, trait = "Occasionally causes mischief doing random actions in the players garden."},
+    ["Tanchozuru"] = {chance = 4.6, trait = "Every 10:24m, meditates for 10.22s, nearby fruits in a 15.22 studs have a 5.11% chance every second to mutate into Tranquill."},
+    ["Kappa"] = {chance = 3.5, trait = "Water Spirit: Every 8 minutes, sprays water on all fruits within 25.62 studs, applying Wet mutation. Has a 10.27% to replace Wet mutations already on fruit with Bloodlit mutation!"},
+    ["Kitsune"] = {chance = 1, trait = "Nine-Tailed Myth: Every ~22 Minutes, goes to another player's fruit, mutates it with Chakra and steals (duplicate) and gives it to the player! Very Rare chance to mutate with Foxfire Chakra instead."},
+}
+
+-- Helper to create ESP objects
+local function createESP(pet)
+    if not pet or not pet.PrimaryPart then return end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "PetESPBox"
+    box.Adornee = pet.PrimaryPart
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Size = pet.PrimaryPart.Size + Vector3.new(1, 1, 1)
+    box.Color3 = Color3.new(0, 1, 0)
+    box.Transparency = 0.5
+    box.Parent = pet.PrimaryPart
+
+    local text = Instance.new("BillboardGui")
+    text.Name = "PetESPText"
+    text.Adornee = pet.PrimaryPart
+    text.AlwaysOnTop = true
+    text.Size = UDim2.new(0, 150, 0, 30)
+    text.StudsOffset = Vector3.new(0, pet.PrimaryPart.Size.Y + 1.5, 0)
+    text.Parent = pet.PrimaryPart
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
-    label.Text = "🎁 " .. eggModel.Name .. " → 🐾 " .. petName
-    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextColor3 = Color3.new(0, 1, 0)
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
     label.TextStrokeTransparency = 0
-    label.TextScaled = true
-    label.Font = Enum.Font.FredokaOne
-    label.Parent = billboard
-    glitchLabelEffect(label)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.Text = pet.Name
+    label.Parent = text
 
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "ESPHighlight"
-    highlight.FillColor = Color3.fromRGB(255, 200, 0)
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.7
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Adornee = basePart
-    highlight.Parent = basePart
+    return {box = box, text = text}
 end
 
-local function removeEggESP(eggModel)
-    local label = eggModel:FindFirstChild("PetBillboard", true)
-    if label then label:Destroy() end
-    local highlight = eggModel:FindFirstChild("ESPHighlight", true)
-    if highlight then highlight:Destroy() end
-end
-
-local function getPlayerGardenEggs(radius)
-    local eggs = {}
-    local char = player.Character or player.CharacterAdded:Wait()
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return eggs end
-
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and petTable[obj.Name] then
-            local basePart = obj:FindFirstChildWhichIsA("BasePart", true)
-            if basePart then
-                local dist = (basePart.Position - root.Position).Magnitude
-                if dist <= (radius or 60) then
-                    if not truePetMap[obj] then
-                        local pets = petTable[obj.Name]
-                        local chosen
-                        if obj.Name == "Zen Egg" then
-                            local r = math.random()
-                            if r <= 0.01 then
-                                chosen = "Kitsune"
-                            elseif r <= 0.045 then
-                                chosen = "Kappa"
-                            elseif r <= 0.091 then
-                                chosen = "Tanchozuru"
-                            elseif r <= 0.30 then
-                                chosen = "Tanuki"
-                            elseif r <= 0.61 then
-                                chosen = "Nihonzaru"
-                            else
-                                chosen = "Shiba Inu"
-                            end
-                        else
-                            chosen = pets[math.random(1, #pets)]
-                        end
-                        truePetMap[obj] = chosen
-                    end
-                    table.insert(eggs, obj)
-                end
-            end
+-- Remove ESP adornments safely
+local function removeESP(espObjects)
+    if espObjects then
+        if espObjects.box then
+            espObjects.box:Destroy()
+        end
+        if espObjects.text then
+            espObjects.text:Destroy()
         end
     end
-    return eggs
 end
 
-local function randomizeNearbyEggs()
-    local eggs = getPlayerGardenEggs(60)
-    for _, egg in ipairs(eggs) do
-        local chosen
-        local pets = petTable[egg.Name]
-        if egg.Name == "Zen Egg" then
-            local r = math.random()
-            if r <= 0.01 then
-                chosen = "Kitsune"
-            elseif r <= 0.045 then
-                chosen = "Kappa"
-            elseif r <= 0.091 then
-                chosen = "Tanchozuru"
-            elseif r <= 0.30 then
-                chosen = "Tanuki"
-            elseif r <= 0.61 then
-                chosen = "Nihonzaru"
-            else
-                chosen = "Shiba Inu"
-            end
-        else
-            chosen = pets[math.random(1, #pets)]
-        end
-        truePetMap[egg] = chosen
-        applyEggESP(egg, chosen)
-    end
-end
-
--- UI
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "PetESP_UI"
-
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 270, 0, 300)
-frame.Position = UDim2.new(0, 20, 0, 100)
-frame.BackgroundColor3 = Color3.fromRGB(105, 80, 60)
-frame.BorderSizePixel = 0
-frame.Parent = screenGui
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-
-local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundTransparency = 1
-title.Text = "🐾 Pet ESP GUI"
-title.Font = Enum.Font.FredokaOne
-title.TextSize = 22
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-
--- Drag Frame
-local drag = Instance.new("TextButton", title)
-drag.Size = UDim2.new(1, 0, 1, 0)
-drag.Text = ""
-drag.BackgroundTransparency = 1
-local dragging = false
-local offset
-drag.MouseButton1Down:Connect(function()
-    dragging = true
-    offset = Vector2.new(mouse.X - frame.Position.X.Offset, mouse.Y - frame.Position.Y.Offset)
-end)
-UserInputService.InputEnded:Connect(function()
-    dragging = false
-end)
-RunService.RenderStepped:Connect(function()
-    if dragging then
-        frame.Position = UDim2.new(0, mouse.X - offset.X, 0, mouse.Y - offset.Y)
-    end
-end)
-
--- Buttons
-local function createButton(text, posY)
-    local btn = Instance.new("TextButton", frame)
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, posY)
-    btn.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
-    btn.Text = text
-    btn.TextSize = 18
-    btn.Font = Enum.Font.FredokaOne
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    return btn
-end
-
-local espBtn = createButton("👁️ ESP: ON", 40)
-espBtn.MouseButton1Click:Connect(function()
-    espEnabled = not espEnabled
-    espBtn.Text = espEnabled and "👁️ ESP: ON" or "👁️ ESP: OFF"
-    for _, egg in pairs(getPlayerGardenEggs(60)) do
+-- Update ESP for all tracked pets depending on espEnabled
+local function updateAllESP()
+    for pet, espObjects in pairs(truePetMap) do
         if espEnabled then
-            applyEggESP(egg, truePetMap[egg])
+            if not espObjects then
+                truePetMap[pet] = createESP(pet)
+            end
         else
-            removeEggESP(egg)
+            removeESP(espObjects)
+            truePetMap[pet] = nil
         end
+    end
+end
+
+-- Connect to new pets spawning (assumed under Workspace.Pets folder)
+local PetsFolder = Workspace:WaitForChild("Pets")
+
+local function onPetAdded(pet)
+    if espEnabled then
+        -- Create ESP for new pet and track it
+        truePetMap[pet] = createESP(pet)
+    end
+    -- Remove ESP if pet is removed
+    pet.AncestryChanged:Connect(function(child, parent)
+        if not parent then
+            removeESP(truePetMap[pet])
+            truePetMap[pet] = nil
+        end
+    end)
+end
+
+-- Initial setup for existing pets
+for _, pet in pairs(PetsFolder:GetChildren()) do
+    if espEnabled then
+        truePetMap[pet] = createESP(pet)
+    end
+    pet.AncestryChanged:Connect(function(child, parent)
+        if not parent then
+            removeESP(truePetMap[pet])
+            truePetMap[pet] = nil
+        end
+    end)
+end
+
+-- Listen for new pets added
+PetsFolder.ChildAdded:Connect(onPetAdded)
+
+-- ESP toggle button logic
+espToggle.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    if espEnabled then
+        -- Create ESP for all pets that currently don't have it
+        for _, pet in pairs(PetsFolder:GetChildren()) do
+            if not truePetMap[pet] then
+                truePetMap[pet] = createESP(pet)
+            end
+        end
+    else
+        -- Remove all ESP overlays immediately
+        for pet, espObjects in pairs(truePetMap) do
+            removeESP(espObjects)
+        end
+        truePetMap = {}
     end
 end)
 
-local randomizeBtn = createButton("🎲 Randomize Pets", 90)
-randomizeBtn.MouseButton1Click:Connect(function()
-    randomizeNearbyEggs()
+-- LEVEL 50 button does nothing (useless)
+level50Button.MouseButton1Click:Connect(function()
+    -- Intentionally blank
 end)
 
-local levelBtn = createButton("🎖️ LEVEL 50", 140)
-levelBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 200)
+-- Cleanup on script disable or player leaving
+local function cleanup()
+    for pet, espObjects in pairs(truePetMap) do
+        removeESP(espObjects)
+    end
+    truePetMap = {}
+end
 
--- Footer credit
-local credit = Instance.new("TextLabel", frame)
-credit.Size = UDim2.new(1, 0, 0, 20)
-credit.Position = UDim2.new(0, 0, 1, -20)
-credit.BackgroundTransparency = 1
-credit.Text = "Made by Jamaldseller"
-credit.Font = Enum.Font.FredokaOne
-credit.TextSize = 14
-credit.TextColor3 = Color3.fromRGB(200, 200, 200)
+-- Optional: clean on player leaving or script disabling
+LocalPlayer.OnLeave:Connect(cleanup)
+
+-- Done
+
