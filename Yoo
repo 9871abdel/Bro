@@ -20,7 +20,7 @@ local petTable = {
     ["Paradise Egg"] = { "Ostrich", "Peacock", "Capybara" },
     ["Dinosaur Egg"] = { "Raptor", "Triceratops", "Stegosaurus" },
     ["Primal Egg"] = { "Parasaurolophus", "Iguanodon", "Pachycephalosaurus" },
-    ["Zen Egg"] = { "Kitsune", "Tanuki", "Shisa" }
+    ["Zen Egg"] = { "Shiba Inu", "Nihonzaru", "Tanuki", "Tanchozuru", "Kappa", "Kitsune" },
 }
 
 local espEnabled = true
@@ -39,11 +39,8 @@ local function glitchLabelEffect(label)
 end
 
 local function applyEggESP(eggModel, petName)
-    local existingLabel = eggModel:FindFirstChild("PetBillboard", true)
-    if existingLabel then existingLabel:Destroy() end
+    removeEggESP(eggModel) -- remove existing before adding new
 
-    local existingHighlight = eggModel:FindFirstChild("ESPHighlight", true)
-    if existingHighlight then existingHighlight:Destroy() end
     if not espEnabled then return end
 
     local basePart = eggModel:FindFirstChildWhichIsA("BasePart", true)
@@ -92,7 +89,7 @@ local function applyEggESP(eggModel, petName)
     highlight.Parent = basePart
 end
 
-local function removeEggESP(eggModel)
+function removeEggESP(eggModel)
     local label = eggModel:FindFirstChild("PetBillboard", true)
     if label then label:Destroy() end
     local highlight = eggModel:FindFirstChild("ESPHighlight", true)
@@ -126,12 +123,18 @@ end
 
 local function randomizeNearbyEggs()
     local eggs = getPlayerGardenEggs(60)
+
+    for _, egg in ipairs(eggs) do
+        removeEggESP(egg)
+    end
+
     for _, egg in ipairs(eggs) do
         local pets = petTable[egg.Name]
         local chosen = pets[math.random(1, #pets)]
         truePetMap[egg] = chosen
         applyEggESP(egg, chosen)
     end
+
     print("Randomized", #eggs, "eggs.")
 end
 
@@ -175,7 +178,6 @@ title.Font = Enum.Font.FredokaOne
 title.TextSize = 22
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 
--- Dragging Logic
 local drag = Instance.new("TextButton", title)
 drag.Size = UDim2.new(1, 0, 1, 0)
 drag.Text = ""
@@ -195,7 +197,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Buttons
 local randomizeBtn = Instance.new("TextButton", frame)
 randomizeBtn.Size = UDim2.new(1, -20, 0, 50)
 randomizeBtn.Position = UDim2.new(0, 10, 0, 40)
@@ -232,70 +233,54 @@ local autoBtn = Instance.new("TextButton", frame)
 autoBtn.Size = UDim2.new(1, -20, 0, 30)
 autoBtn.Position = UDim2.new(0, 10, 0, 145)
 autoBtn.BackgroundColor3 = Color3.fromRGB(80, 150, 60)
-autoBtn.Text = "🔄 Auto Randomize: OFF"
+autoBtn.Text = "🔁 Auto Randomize: OFF"
 autoBtn.TextSize = 16
 autoBtn.Font = Enum.Font.FredokaOne
 autoBtn.TextColor3 = Color3.new(1, 1, 1)
 
-local autoRandomize = false
-local autoDelay = 10
+local autoRunning = false
+local bestPets = {
+    ["Raccoon"] = true, ["Dragonfly"] = true, ["Queen Bee"] = true,
+    ["Disco Bee"] = true, ["Fennec Fox"] = true, ["Fox"] = true,
+    ["Mimic Octopus"] = true
+}
 
 autoBtn.MouseButton1Click:Connect(function()
-    autoRandomize = not autoRandomize
-    autoBtn.Text = autoRandomize and "🔄 Auto Randomize: ON" or "🔄 Auto Randomize: OFF"
-    if autoRandomize then
-        spawn(function()
-            while autoRandomize do
-                randomizeNearbyEggs()
-                wait(autoDelay)
+    autoRunning = not autoRunning
+    autoBtn.Text = autoRunning and "🔁 Auto Randomize: ON" or "🔁 Auto Randomize: OFF"
+    coroutine.wrap(function()
+        while autoRunning do
+            countdownAndRandomize(randomizeBtn)
+            for _, petName in pairs(truePetMap) do
+                if bestPets[petName] then
+                    autoRunning = false
+                    autoBtn.Text = "🔁 Auto Randomize: OFF"
+                    return
+                end
             end
-        end)
-    end
+            wait(1)
+        end
+    end)()
 end)
 
-local autoDelayLabel = Instance.new("TextLabel", frame)
-autoDelayLabel.Size = UDim2.new(1, -20, 0, 30)
-autoDelayLabel.Position = UDim2.new(0, 10, 0, 180)
-autoDelayLabel.BackgroundTransparency = 1
-autoDelayLabel.Text = "Auto Delay: " .. autoDelay .. "s"
-autoDelayLabel.TextColor3 = Color3.new(1, 1, 1)
-autoDelayLabel.Font = Enum.Font.FredokaOne
-autoDelayLabel.TextSize = 16
+local levelBtn = Instance.new("TextButton", frame)
+levelBtn.Size = UDim2.new(1, -20, 0, 25)
+levelBtn.Position = UDim2.new(0, 10, 0, 185)
+levelBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+levelBtn.Text = "🧪 LEVEL 50 (useless)"
+levelBtn.TextSize = 14
+levelBtn.Font = Enum.Font.FredokaOne
+levelBtn.TextColor3 = Color3.new(1, 1, 1)
 
-local delayUp = Instance.new("TextButton", frame)
-delayUp.Size = UDim2.new(0, 30, 0, 30)
-delayUp.Position = UDim2.new(1, -40, 0, 180)
-delayUp.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
-delayUp.Text = "+"
-delayUp.Font = Enum.Font.FredokaOne
-delayUp.TextSize = 20
-delayUp.TextColor3 = Color3.new(1, 1, 1)
+local credit = Instance.new("TextLabel", frame)
+credit.Size = UDim2.new(1, 0, 0, 20)
+credit.Position = UDim2.new(0, 0, 1, -20)
+credit.BackgroundTransparency = 1
+credit.Text = "Made by Jamaldseller"
+credit.Font = Enum.Font.FredokaOne
+credit.TextSize = 14
+credit.TextColor3 = Color3.fromRGB(200, 200, 200)
 
-local delayDown = Instance.new("TextButton", frame)
-delayDown.Size = UDim2.new(0, 30, 0, 30)
-delayDown.Position = UDim2.new(1, -80, 0, 180)
-delayDown.BackgroundColor3 = Color3.fromRGB(120, 70, 70)
-delayDown.Text = "-"
-delayDown.Font = Enum.Font.FredokaOne
-delayDown.TextSize = 20
-delayDown.TextColor3 = Color3.new(1, 1, 1)
-
-delayUp.MouseButton1Click:Connect(function()
-    autoDelay = math.clamp(autoDelay + 1, 5, 60)
-    autoDelayLabel.Text = "Auto Delay: " .. autoDelay .. "s"
-end)
-
-delayDown.MouseButton1Click:Connect(function()
-    autoDelay = math.clamp(autoDelay - 1, 5, 60)
-    autoDelayLabel.Text = "Auto Delay: " .. autoDelay .. "s"
-end)
-
--- Auto-hide GUI toggle (Shift+P)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.P and UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-        screenGui.Enabled = not screenGui.Enabled
-    end
-end)
-
-print("Pet Randomizer GUI loaded. Use Shift+P to toggle GUI visibility.")
+for _, egg in pairs(getPlayerGardenEggs(60)) do
+    applyEggESP(egg, truePetMap[egg])
+end
